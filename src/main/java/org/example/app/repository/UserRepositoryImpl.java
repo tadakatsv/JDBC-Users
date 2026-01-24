@@ -49,7 +49,7 @@ public class UserRepositoryImpl implements UserRepository<User> {
             // Колекція-контейнер для даних, які читаються з БД
             List<User> list = new ArrayList<>();
             // SQL-запит
-            String sql = "SELECT id, firstName, lastName, phone, email FROM "
+            String sql = "SELECT id, name, surname, email FROM "
                     + TABLE_USERS;
             // Отримання набору даних з БД через виконання SQL-запиту
             ResultSet rs = stmt.executeQuery(sql);
@@ -152,7 +152,7 @@ public class UserRepositoryImpl implements UserRepository<User> {
         // Ефективність. Коли використовуємо підготовлені оператори (PreparedStatement),
         // базі даних не потрібно щоразу аналізувати/компілювати SQL-запит.
         // Використовується шаблон та просто підставляються в нього значення.
-        String sql = "SELECT id, firstName, lastName, phone, email FROM "
+        String sql = "SELECT id, name, surname, email FROM "
                 + TABLE_USERS + " WHERE id = ?";
         try (PreparedStatement pst = DBConn.connect().prepareStatement(sql)) {
             pst.setLong(1, id);
