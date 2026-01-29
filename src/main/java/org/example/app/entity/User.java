@@ -1,12 +1,27 @@
 package org.example.app.entity;
 
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "users")
 public class User {
+
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Long id;
+
+    @Column(name = "name")
     private String name;
+
+    @Column(name = "surname")
     private String surname;
+
+    @Column(name = "email")
     private String email;
 
-    public User(){
+    public User() {
     }
 
     public User(Long id, String name, String surname, String email) {
@@ -49,7 +64,7 @@ public class User {
     }
 
     public String toString() {
-        return  "id " + id +
-                "Name and surname: " + name + " " + surname + "\n" +  email + " + email";
+        return  "id:" + id + "\n" +
+                "Name and surname: " + name + " " + surname + "\n" + "email" + email ;
     }
 }

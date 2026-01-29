@@ -1,43 +1,50 @@
 package org.example.app.repository;
 
-import org.example.app.config.DBConn;
+import org.example.app.config.HibernateConfig;
 import org.example.app.entity.User;
 import org.example.app.utils.Constants;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import org.hibernate.query.MutationQuery;
+import org.hibernate.query.Query;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 public class UserRepositoryImpl implements UserRepository<User> {
 
-    private final static String TABLE_USERS = "users";
 
-    @Override
+   @Override
     public String create(User user) {
-        // SQL-запит.
-        // ? - заповнювач (placeholder) для параметра. Навіщо?
-        // Захист від SQL-ін'єкцій.
-        // Ефективність. Коли використовуємо підготовлені оператори (PreparedStatement),
-        // базі даних не потрібно щоразу аналізувати/компілювати SQL-запит.
-        // Використовується шаблон та просто підставляються в нього значення.
-        String sql = "INSERT INTO " + TABLE_USERS +
-                " (name, surname, email) VALUES(?, ?, ?)";
-        // PreparedStatement - підготовлений вираз (оператор), щоб уникнути SQL-ін'єкцій
-        try (PreparedStatement pstmt = DBConn.connect().prepareStatement(sql)) {
-            // Формування конкретних значень для певного заповнювача
-            pstmt.setString(1, user.getSurname());
-            pstmt.setString(2, user.getName());
-            pstmt.setString(3, user.getEmail());
-            // Виконання SQL-запиту
-            pstmt.executeUpdate();
+        Transaction transaction = null;
+        try (Session session =
+                     HibernateConfig.getSessionFactory().openSession()) {
+            // Транзакція стартує
+            transaction = session.beginTransaction();
+            // HQL-запит.
+            // :[parameter name] - іменований параметр (named parameter),
+            // двокрапка перед іменем.
+            String hql = "INSERT INTO User " +
+                    "(name, surname, email) " +
+                    "VALUES (:name, :surname, :email)";
+            // Створення HQL-запиту
+            MutationQuery query = session.createMutationQuery(hql);
+            // Формування конкретних значень для певного іменованого параметра
+            query.setParameter("name", user.getName());
+            query.setParameter("surname", user.getSurname());
+            query.setParameter("email", user.getEmail());
+            // Виконання HQL-запиту
+            query.executeUpdate();
+            // Транзакція виконується
+            transaction.commit();
             // Повернення повідомлення при безпомилковому
-            // виконанні SQL-запиту
+            // виконанні транзакції
             return Constants.DATA_INSERT_MSG;
-        } catch (SQLException e) {
+        } catch (Exception e) {
+            if (transaction != null) {
+                // Відкочення поточної транзакції ресурсу
+                transaction.rollback();
+            }
             // Повернення повідомлення про помилку роботи з БД
             return e.getMessage();
         }
@@ -45,32 +52,28 @@ public class UserRepositoryImpl implements UserRepository<User> {
 
     @Override
     public Optional<List<User>> read() {
-        try (Statement stmt = DBConn.connect().createStatement()) {
-            // Колекція-контейнер для даних, які читаються з БД
-            List<User> list = new ArrayList<>();
-            // SQL-запит
-            String sql = "SELECT id, name, surname, email FROM "
-                    + TABLE_USERS;
-            // Отримання набору даних з БД через виконання SQL-запиту
-            ResultSet rs = stmt.executeQuery(sql);
-            // Наповнення колекції-контейнера об'єктами з БД
-            while (rs.next()) {
-                list.add(new User(
-                                rs.getLong("id"),
-                                rs.getString("name"),
-                                rs.getString("surname"),
-                                rs.getString("email")
-                        )
-                );
-            }
+        try (Session session =
+                     HibernateConfig.getSessionFactory().openSession()) {
+            Transaction transaction;
+            // Транзакція стартує
+            transaction = session.beginTransaction();
+            // Формування колекції даними з БД через HQL-запит
+            List<User> list =
+                    session.createQuery("FROM User", User.class)
+                            .list();
+            // Транзакція виконується
+            transaction.commit();
+            // Повернення результату транзакції
             // Повертаємо Optional-контейнер з колецією даних
             return Optional.of(list);
-        } catch (SQLException e) {
+        } catch (Exception e) {
             // Якщо помилка повертаємо порожній Optional-контейнер
             return Optional.empty();
         }
     }
 
+
+    //return Constants.DATA_ABSENT_MSG;
     @Override
     public String update(User user) {
         // Спершу перевіряємо наявність об'єкта в БД за таким id.
@@ -79,29 +82,36 @@ public class UserRepositoryImpl implements UserRepository<User> {
         if (readById(user.getId()).isEmpty()) {
             return Constants.DATA_ABSENT_MSG;
         } else {
-            // SQL-запит.
-            // ? - заповнювач (placeholder) для параметра. Навіщо?
-            // Захист від SQL-ін'єкцій.
-            // Ефективність. Коли використовуємо підготовлені оператори
-            // (PreparedStatement),
-            // базі даних не потрібно щоразу аналізувати/компілювати SQL-запит.
-            // Використовується шаблон та просто підставляються в нього значення.
-            String sql = "UPDATE " + TABLE_USERS +
-                    " SET name = ?, surname = ?, email = ?" +
-                    " WHERE id = ?";
-            // PreparedStatement - підготовлений вираз, щоб уникнути SQL-ін'єкцій
-            try (PreparedStatement pst = DBConn.connect().prepareStatement(sql)) {
-                // Формування конкретних значень для певного заповнювача
-                pst.setString(1, user.getSurname());
-                pst.setString(2, user.getName());
-                pst.setString(3, user.getEmail());
-                pst.setLong(5, user.getId());
-                // Виконання SQL-запиту
-                pst.executeUpdate();
+            Transaction transaction = null;
+            try (Session session =
+                         HibernateConfig.getSessionFactory().openSession()) {
+                // Транзакция стартует
+                transaction = session.beginTransaction();
+                // HQL-запит.
+                // :[parameter name] - іменований параметр (named parameter),
+                // двокрапка перед іменем.
+                String hql = "UPDATE User " +
+                        "SET name = :name, surname = :surname, " +
+                        " email = :email WHERE id = :id";
+                // Створення HQL-запиту
+                MutationQuery query = session.createMutationQuery(hql);
+                // Формування конкретних значень для певного іменованого параметра
+                query.setParameter("name", user.getName());
+                query.setParameter("surname", user.getSurname());
+                query.setParameter("email", user.getEmail());
+                query.setParameter("id", user.getId());
+                // Виконання HQL-запиту
+                query.executeUpdate();
+                // Транзакція виконується
+                transaction.commit();
                 // Повернення повідомлення при безпомилковому
-                // виконанні SQL-запиту
+                // виконанні транзакції
                 return Constants.DATA_UPDATE_MSG;
-            } catch (SQLException e) {
+            } catch (Exception e) {
+                if (transaction != null) {
+                    // Відкочення поточної транзакції ресурсу
+                    transaction.rollback();
+                }
                 // Повернення повідомлення про помилку роботи з БД
                 return e.getMessage();
             }
@@ -110,34 +120,37 @@ public class UserRepositoryImpl implements UserRepository<User> {
 
     @Override
     public String delete(Long id) {
-        // Спершу перевіряємо наявність такого id в БД.
-        // Якщо ні, повертаємо повідомлення про відсутність
-        // таких даних в БД, інакше видаляємо відповідний об'єкт
-        // із БД.
-        if (!isIdExists(id)) {
+        // Спершу перевіряємо наявність об'єкта в БД за таким id.
+        // Якщо ні, повертаємо повідомлення про відсутність таких даних,
+        // інакше видаляємо відповідний об'єкт із БД
+        if (readById(id).isEmpty()) {
             return Constants.DATA_ABSENT_MSG;
         } else {
-            // SQL-запит.
-            // ? - заповнювач (placeholder) для параметра. Навіщо?
-            // Захист від SQL-ін'єкцій.
-            // Ефективність. Коли використовуємо підготовлені оператори
-            // (PreparedStatement), базі даних не потрібно щоразу
-            // аналізувати/компілювати SQL-запит.
-            // Використовується шаблон та просто підставляються в нього
-            // значення.
-            String sql = "DELETE FROM " + TABLE_USERS +
-                    " WHERE id = ?";
-            // PreparedStatement - підготовлений вираз (оператор),
-            // щоб уникнути SQL-ін'єкцій
-            try (PreparedStatement pst = DBConn.connect().prepareStatement(sql)) {
-                // Формування конкретних значень для певного заповнювача
-                pst.setLong(1, id);
-                // Виконання SQL-запиту
-                pst.executeUpdate();
+            Transaction transaction = null;
+            try (Session session =
+                         HibernateConfig.getSessionFactory().openSession()) {
+                // Транзакція стартує
+                transaction = session.beginTransaction();
+                // HQL-запит.
+                // :[parameter name] - іменований параметр (named parameter),
+                // двокрапка перед іменем.
+                String hql = "DELETE FROM User WHERE id = :id";
+                // Створення HQL-запиту
+                MutationQuery query = session.createMutationQuery(hql);
+                // Формування конкретних значень для певного іменованого параметра
+                query.setParameter("id", id);
+                // Виконання HQL-запиту
+                query.executeUpdate();
+                // Транзакція виконується
+                transaction.commit();
                 // Повернення повідомлення при безпомилковому
-                // виконанні SQL-запиту
+                // виконанні транзакції
                 return Constants.DATA_DELETE_MSG;
-            } catch (SQLException e) {
+            } catch (Exception e) {
+                if (transaction != null) {
+                    // Відкочення поточної транзакції ресурсу
+                    transaction.rollback();
+                }
                 // Повернення повідомлення про помилку роботи з БД
                 return e.getMessage();
             }
@@ -146,49 +159,49 @@ public class UserRepositoryImpl implements UserRepository<User> {
 
     @Override
     public Optional<User> readById(Long id) {
-        // SQL-запит.
-        // ? - заповнювач (placeholder) для параметра. Навіщо?
-        // Захист від SQL-ін'єкцій.
-        // Ефективність. Коли використовуємо підготовлені оператори (PreparedStatement),
-        // базі даних не потрібно щоразу аналізувати/компілювати SQL-запит.
-        // Використовується шаблон та просто підставляються в нього значення.
-        String sql = "SELECT id, name, surname, email FROM "
-                + TABLE_USERS + " WHERE id = ?";
-        try (PreparedStatement pst = DBConn.connect().prepareStatement(sql)) {
-            pst.setLong(1, id);
-            ResultSet rs = pst.executeQuery();
-            rs.next();
-            User user = new User(
-                    rs.getLong("id"),
-                    rs.getString("name"),
-                    rs.getString("surname"),
-                    rs.getString("email")
-            );
+        Transaction transaction = null;
+        Optional<User> optional;
+        try (Session session =
+                     HibernateConfig.getSessionFactory().openSession()) {
+            // Транзакція стартує
+            transaction = session.beginTransaction();
+            // HQL-запит.
+            // :[parameter name] - іменований параметр (named parameter),
+            // двокрапка перед іменем.
+            String hql = " FROM User c WHERE c.id = :id";
+            // Створюємо запит
+            Query<User> query = session.createQuery(hql, User.class);
+            query.setParameter("id", id);
+            // Намагаємося отримати об'єкт за id
+            optional = query.uniqueResultOptional();
+            // Транзакція виконується
+            transaction.commit();
+            // Повернення результату транзакції
             // Повертаємо Optional-контейнер з об'єктом
-            return Optional.of(user);
-        } catch (SQLException e) {
-            // Якщо помилка або такого об'єкту немає в БД,
-            // повертаємо порожній Optional-контейнер
+            return optional;
+        } catch (Exception e) {
+            if (transaction != null) {
+                // Відкочення поточної транзакції ресурсу
+                transaction.rollback();
+            }
+            // Якщо помилка повертаємо порожній Optional-контейнер
             return Optional.empty();
         }
     }
 
     // Перевірка наявності певного id у БД
-    private boolean isIdExists(Long id) {
-        String sql = "SELECT COUNT(id) FROM " + TABLE_USERS +
-                " WHERE id = ?";
-        try {
-            PreparedStatement pst = DBConn.connect().prepareStatement(sql);
-            pst.setLong(1, id);
-            try (ResultSet rs = pst.executeQuery()) {
-                // Очікуємо лише один результат
-                if (rs.next()) {
-                    return rs.getBoolean(1);
-                }
+    private boolean isEntityWithSuchIdExists(User user) {
+        try (Session session =
+                     HibernateConfig.getSessionFactory().openSession()) {
+            // Перевірка наявності об'єкту за певним id
+            user = session.get(User.class, user.getId());
+            if (user != null) {
+                Query<User> query =
+                        session.createQuery("FROM User", User.class);
+                query.setMaxResults(1);
+                query.getResultList();
             }
-        } catch (SQLException e) {
-            return false;
+            return user != null;
         }
-        return false;
     }
 }

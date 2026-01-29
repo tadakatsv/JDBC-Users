@@ -10,10 +10,10 @@ public class UserMapper {
         User user = new User();
         if (data.containsKey("id"))
             user.setId(Long.parseLong(data.get("id")));
-        if (data.containsKey("first_name"))
-            user.setName(data.get("first_name"));
-        if (data.containsKey("last_name"))
-            user.setSurname(data.get("last_name"));
+        if (data.containsKey("name"))
+            user.setName(data.get("name"));
+        if (data.containsKey("surname"))
+            user.setSurname(data.get("surname"));
         if (data.containsKey("email"))
             user.setEmail(data.get("email"));
         return user;

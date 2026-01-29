@@ -12,9 +12,9 @@ public class UserCreateView {
         Map<String, String> map = new HashMap<>();
         Scanner scanner = new Scanner(System.in);
         System.out.print("Input name: ");
-        map.put("first_name", scanner.nextLine().trim());
+        map.put("name", scanner.nextLine().trim());
         System.out.print("Input surname: ");
-        map.put("last_name", scanner.nextLine().trim());
+        map.put("surname", scanner.nextLine().trim());
         System.out.print("Input email in format example@mail.com: ");
         map.put("email", scanner.nextLine().trim());
         return map;
